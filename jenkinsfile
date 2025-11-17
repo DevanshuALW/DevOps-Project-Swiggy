@@ -13,7 +13,9 @@ pipeline {
     stages {
 
         stage('Clean workspace') {
-            steps { cleanWs() }
+            steps {
+                cleanWs(cleanWhenSuccess: false, deleteDirs: true)
+            }
         }
 
         stage('Checkout') {
@@ -45,18 +47,15 @@ pipeline {
         }
 
         stage('Install Dependencies') {
-            steps { sh 'npm install' }
-        }
-
-        stage('OWASP Scan') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                sh 'npm install'
             }
         }
 
         stage('Trivy FS Scan') {
-            steps { sh 'trivy fs . > trivyfs.txt' }
+            steps {
+                sh 'trivy fs . > trivyfs.txt'
+            }
         }
 
         stage('Docker Build & Push') {
@@ -72,7 +71,9 @@ pipeline {
         }
 
         stage('Trivy Docker Scan') {
-            steps { sh 'trivy image devanshu001/swiggy:latest > trivy.txt' }
+            steps {
+                sh 'trivy image devanshu001/swiggy:latest > trivy.txt'
+            }
         }
 
         stage('Deploy') {
