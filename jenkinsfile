@@ -57,7 +57,7 @@ pipeline {
             steps {
                 sh """
                 mkdir -p ${TRIVY_CACHE}
-                trivy fs . --cache-dir ${TRIVY_CACHE} --skip-db-update > trivyfs.txt
+                trivy fs . --cache-dir ${TRIVY_CACHE} > trivyfs.txt
                 """
             }
         }
@@ -82,12 +82,10 @@ pipeline {
             steps {
                 sh """
                 trivy image devanshu001/swiggy:latest \
-                --cache-dir ${TRIVY_CACHE} \
-                --skip-db-update > trivy.txt
+                --cache-dir ${TRIVY_CACHE} > trivy.txt
                 """
             }
         }
-
         stage('Deploy') {
             steps {
                 sh """
