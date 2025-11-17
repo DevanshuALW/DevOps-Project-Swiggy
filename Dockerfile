@@ -1,23 +1,38 @@
-# Using Node.js 16 as the base image
-FROM node:16
+# -----------------------------
+# 1️⃣ BUILD STAGE (dependencies + build)
+# -----------------------------
+FROM node:22-alpine AS builder
 
-# Setting up the working directory
+# Set working directory
 WORKDIR /app
 
-# Copying the package.json and package-lock.json files to the working directory
+# Install libc6-compat for some npm packages (optional but recommended)
+RUN apk add --no-cache libc6-compat
+
+# Copy package.json and package-lock.json first (for Docker caching)
 COPY package*.json ./
 
-# Installation of npm dependency
-RUN npm install
+# Install only production dependencies
+RUN npm ci --omit=dev
 
-# Copy the application code
+# Copy source code
 COPY . .
 
-# Buildinf of the React app
-RUN npm run build
+# -----------------------------
+# 2️⃣ RUNTIME STAGE (clean, small, secure)
+# -----------------------------
+FROM node:22-alpine AS runner
 
-# Expose port 3000 to access app
+WORKDIR /app
+
+# Copy only necessary files from builder stage
+COPY --from=builder /app /app
+
+# Expose the application port
 EXPOSE 3000
 
-# Start your Node.js server
-CMD ["npm", "start"]
+# Set node environment
+ENV NODE_ENV=production
+
+# Run the application
+CMD ["node", "index.js"]
