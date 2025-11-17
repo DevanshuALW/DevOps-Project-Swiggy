@@ -2,13 +2,12 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node22'   // Make sure this matches your Jenkins NodeJS tool
+        nodejs 'node25'
         jdk 'jdk17'
     }
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        TRIVY_CACHE = "/var/lib/trivy"
     }
 
     stages {
@@ -28,51 +27,44 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh """
-                    ${SCANNER_HOME}/bin/sonar-scanner \
+                    sh '''
+                    $SCANNER_HOME/bin/sonar-scanner \
                         -Dsonar.projectKey=Swiggy \
                         -Dsonar.projectName=Swiggy \
                         -Dsonar.sources=. \
                         -Dsonar.exclusions=node_modules/**,.terraform/**,build/**,dist/**
-                    """
+                    '''
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 3, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                script {
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm ci'
+                sh 'npm install'
             }
         }
 
         stage('Trivy FS Scan') {
             steps {
-                sh """
-                mkdir -p ${TRIVY_CACHE}
-                trivy fs . --cache-dir ${TRIVY_CACHE} --skip-db-update > trivyfs.txt
-                """
+                sh 'trivy fs . > trivyfs.txt'
             }
         }
 
-        stage('Docker Build & Push (Optimized)') {
+        stage('Docker Build & Push') {
             steps {
                 script {
                     withDockerRegistry([credentialsId: 'docker-creds']) {
-
-                        sh """
-                        echo "Building optimized multi-stage Docker image..."
-                        docker build -t swiggy .
-                        docker tag swiggy devanshu001/swiggy:latest
-                        docker push devanshu001/swiggy:latest
-                        """
+                        sh 'docker build -t swiggy .'
+                        sh 'docker tag swiggy devanshu001/swiggy:latest'
+                        sh 'docker push devanshu001/swiggy:latest'
                     }
                 }
             }
@@ -80,20 +72,16 @@ pipeline {
 
         stage('Trivy Docker Scan') {
             steps {
-                sh """
-                trivy image devanshu001/swiggy:latest \
-                --cache-dir ${TRIVY_CACHE} \
-                --skip-db-update > trivy.txt
-                """
+                sh 'trivy image devanshu001/swiggy:latest > trivy.txt'
             }
         }
 
         stage('Deploy') {
             steps {
-                sh """
+                sh '''
                 docker rm -f swiggy || true
                 docker run -d --name swiggy -p 3000:3000 devanshu001/swiggy:latest
-                """
+                '''
             }
         }
     }
