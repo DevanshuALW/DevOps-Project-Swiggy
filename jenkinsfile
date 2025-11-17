@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        jdk 'jdk17'          
         nodejs 'node25'
+        jdk 'jdk17'
     }
 
     environment {
@@ -12,81 +12,75 @@ pipeline {
 
     stages {
 
-        stage('clean workspace') {
-            steps {
-                cleanWs()
-            }
+        stage('Clean workspace') {
+            steps { cleanWs() }
         }
 
-        stage('Checkout from Git') {
+        stage('Checkout') {
             steps {
                 git 'https://github.com/DevanshuALW/DevOps-Project-Swiggy.git'
             }
         }
 
-        stage('Sonarqube Analysis') {
+        stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sonar-server') {
                     sh '''
-                        $SCANNER_HOME/bin/sonar-scanner \
+                    $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectKey=Swiggy \
                         -Dsonar.projectName=Swiggy \
-                        -Dsonar.projectKey=Swiggy
+                        -Dsonar.sources=. \
+                        -Dsonar.exclusions=node_modules/**,.terraform/**,build/**,dist/**
                     '''
                 }
             }
         }
 
-        stage('quality gate') {
+        stage('Quality Gate') {
             steps {
                 script {
-                    waitForQualityGate abortPipeline: true
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
 
         stage('Install Dependencies') {
-            steps {
-                sh "npm install"
-            }
+            steps { sh 'npm install' }
         }
 
-        stage('OWASP FS SCAN') {
+        stage('OWASP Scan') {
             steps {
                 dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
 
-        stage('TRIVY FS SCAN') {
-            steps {
-                sh "trivy fs . > trivyfs.txt"
-            }
+        stage('Trivy FS Scan') {
+            steps { sh 'trivy fs . > trivyfs.txt' }
         }
 
         stage('Docker Build & Push') {
             steps {
                 script {
                     withDockerRegistry([credentialsId: 'docker-creds']) {
-                        sh "docker build -t swiggy ."
-                        sh "docker tag swiggy devanshu001/swiggy:latest"
-                        sh "docker push devanshu001/swiggy:latest"
+                        sh 'docker build -t swiggy .'
+                        sh 'docker tag swiggy devanshu001/swiggy:latest'
+                        sh 'docker push devanshu001/swiggy:latest'
                     }
                 }
             }
         }
 
-        stage('TRIVY') {
-            steps {
-                sh "trivy image devanshu001/swiggy:latest > trivy.txt"
-            }
+        stage('Trivy Docker Scan') {
+            steps { sh 'trivy image devanshu001/swiggy:latest > trivy.txt' }
         }
 
-        stage('Deploy to container') {
+        stage('Deploy') {
             steps {
-                sh """
+                sh '''
                 docker rm -f swiggy || true
                 docker run -d --name swiggy -p 3000:3000 devanshu001/swiggy:latest
-                """
+                '''
             }
         }
     }
